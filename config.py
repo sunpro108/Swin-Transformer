@@ -38,6 +38,11 @@ _C.DATA.PIN_MEMORY = True
 # Number of data loading threads
 _C.DATA.NUM_WORKERS = 8
 
+# [SimMIM] Mask patch size for MaskGenerator
+_C.DATA.MASK_PATCH_SIZE = 32
+# [SimMIM] Mask ratio for MaskGenerator
+_C.DATA.MASK_RATIO = 0.6
+
 # -----------------------------------------------------------------------------
 # Model settings
 # -----------------------------------------------------------------------------
@@ -74,6 +79,50 @@ _C.MODEL.SWIN.QK_SCALE = None
 _C.MODEL.SWIN.APE = False
 _C.MODEL.SWIN.PATCH_NORM = True
 
+# Swin Transformer V2 parameters
+_C.MODEL.SWINV2 = CN()
+_C.MODEL.SWINV2.PATCH_SIZE = 4
+_C.MODEL.SWINV2.IN_CHANS = 3
+_C.MODEL.SWINV2.EMBED_DIM = 96
+_C.MODEL.SWINV2.DEPTHS = [2, 2, 6, 2]
+_C.MODEL.SWINV2.NUM_HEADS = [3, 6, 12, 24]
+_C.MODEL.SWINV2.WINDOW_SIZE = 7
+_C.MODEL.SWINV2.MLP_RATIO = 4.
+_C.MODEL.SWINV2.QKV_BIAS = True
+_C.MODEL.SWINV2.APE = False
+_C.MODEL.SWINV2.PATCH_NORM = True
+_C.MODEL.SWINV2.PRETRAINED_WINDOW_SIZES = [0, 0, 0, 0]
+
+# Swin Transformer MoE parameters
+_C.MODEL.SWIN_MOE = CN()
+_C.MODEL.SWIN_MOE.PATCH_SIZE = 4
+_C.MODEL.SWIN_MOE.IN_CHANS = 3
+_C.MODEL.SWIN_MOE.EMBED_DIM = 96
+_C.MODEL.SWIN_MOE.DEPTHS = [2, 2, 6, 2]
+_C.MODEL.SWIN_MOE.NUM_HEADS = [3, 6, 12, 24]
+_C.MODEL.SWIN_MOE.WINDOW_SIZE = 7
+_C.MODEL.SWIN_MOE.MLP_RATIO = 4.
+_C.MODEL.SWIN_MOE.QKV_BIAS = True
+_C.MODEL.SWIN_MOE.QK_SCALE = None
+_C.MODEL.SWIN_MOE.APE = False
+_C.MODEL.SWIN_MOE.PATCH_NORM = True
+_C.MODEL.SWIN_MOE.MLP_FC2_BIAS = True
+_C.MODEL.SWIN_MOE.INIT_STD = 0.02
+_C.MODEL.SWIN_MOE.PRETRAINED_WINDOW_SIZES = [0, 0, 0, 0]
+_C.MODEL.SWIN_MOE.MOE_BLOCKS = [[-1], [-1], [-1], [-1]]
+_C.MODEL.SWIN_MOE.NUM_LOCAL_EXPERTS = 1
+_C.MODEL.SWIN_MOE.TOP_VALUE = 1
+_C.MODEL.SWIN_MOE.CAPACITY_FACTOR = 1.25
+_C.MODEL.SWIN_MOE.COSINE_ROUTER = False
+_C.MODEL.SWIN_MOE.NORMALIZE_GATE = False
+_C.MODEL.SWIN_MOE.USE_BPR = True
+_C.MODEL.SWIN_MOE.IS_GSHARD_LOSS = False
+_C.MODEL.SWIN_MOE.GATE_NOISE = 1.0
+_C.MODEL.SWIN_MOE.COSINE_ROUTER_DIM = 256
+_C.MODEL.SWIN_MOE.COSINE_ROUTER_INIT_T = 0.5
+_C.MODEL.SWIN_MOE.MOE_DROP = 0.0
+_C.MODEL.SWIN_MOE.AUX_LOSS_WEIGHT = 0.01
+
 # Swin MLP parameters
 _C.MODEL.SWIN_MLP = CN()
 _C.MODEL.SWIN_MLP.PATCH_SIZE = 4
@@ -85,6 +134,12 @@ _C.MODEL.SWIN_MLP.WINDOW_SIZE = 7
 _C.MODEL.SWIN_MLP.MLP_RATIO = 4.
 _C.MODEL.SWIN_MLP.APE = False
 _C.MODEL.SWIN_MLP.PATCH_NORM = True
+
+# [SimMIM] Norm target during training
+_C.MODEL.SIMMIM = CN()
+_C.MODEL.SIMMIM.NORM_TARGET = CN()
+_C.MODEL.SIMMIM.NORM_TARGET.ENABLE = False
+_C.MODEL.SIMMIM.NORM_TARGET.PATCH_SIZE = 47
 
 # -----------------------------------------------------------------------------
 # Training settings
@@ -103,7 +158,7 @@ _C.TRAIN.CLIP_GRAD = 5.0
 _C.TRAIN.AUTO_RESUME = True
 # Gradient accumulation steps
 # could be overwritten by command line argument
-_C.TRAIN.ACCUMULATION_STEPS = 0
+_C.TRAIN.ACCUMULATION_STEPS = 1
 # Whether to use gradient checkpointing to save memory
 # could be overwritten by command line argument
 _C.TRAIN.USE_CHECKPOINT = False
@@ -115,6 +170,11 @@ _C.TRAIN.LR_SCHEDULER.NAME = 'cosine'
 _C.TRAIN.LR_SCHEDULER.DECAY_EPOCHS = 30
 # LR decay rate, used in StepLRScheduler
 _C.TRAIN.LR_SCHEDULER.DECAY_RATE = 0.1
+# warmup_prefix used in CosineLRScheduler
+_C.TRAIN.LR_SCHEDULER.WARMUP_PREFIX = True
+# [SimMIM] Gamma / Multi steps value, used in MultiStepLRScheduler
+_C.TRAIN.LR_SCHEDULER.GAMMA = 0.1
+_C.TRAIN.LR_SCHEDULER.MULTISTEPS = []
 
 # Optimizer
 _C.TRAIN.OPTIMIZER = CN()
@@ -126,6 +186,13 @@ _C.TRAIN.OPTIMIZER.BETAS = (0.9, 0.999)
 # SGD momentum
 _C.TRAIN.OPTIMIZER.MOMENTUM = 0.9
 
+# [SimMIM] Layer decay for fine-tuning
+_C.TRAIN.LAYER_DECAY = 1.0
+
+# MoE
+_C.TRAIN.MOE = CN()
+# Only save model on master device
+_C.TRAIN.MOE.SAVE_MASTER = False
 # -----------------------------------------------------------------------------
 # Augmentation settings
 # -----------------------------------------------------------------------------
@@ -161,12 +228,17 @@ _C.TEST = CN()
 _C.TEST.CROP = True
 # Whether to use SequentialSampler as validation sampler
 _C.TEST.SEQUENTIAL = False
+_C.TEST.SHUFFLE = False
 
 # -----------------------------------------------------------------------------
 # Misc
 # -----------------------------------------------------------------------------
-# Mixed precision opt level, if O0, no amp is used ('O0', 'O1', 'O2')
-# overwritten by command line argument
+# [SimMIM] Whether to enable pytorch amp, overwritten by command line argument
+_C.ENABLE_AMP = False
+
+# Enable Pytorch automatic mixed precision (amp).
+_C.AMP_ENABLE = True
+# [Deprecated] Mixed precision opt level of apex, if O0, no apex amp is used ('O0', 'O1', 'O2')
 _C.AMP_OPT_LEVEL = ''
 # Path to output folder, overwritten by command line argument
 _C.OUTPUT = ''
@@ -184,6 +256,9 @@ _C.EVAL_MODE = False
 _C.THROUGHPUT_MODE = False
 # local rank for DistributedDataParallel, given by command line argument
 _C.LOCAL_RANK = 0
+# for acceleration
+_C.FUSED_WINDOW_PROCESS = False
+_C.FUSED_LAYERNORM = False
 
 
 def _update_config_from_file(config, cfg_file):
@@ -208,33 +283,55 @@ def update_config(config, args):
     if args.opts:
         config.merge_from_list(args.opts)
 
+    def _check_args(name):
+        if hasattr(args, name) and eval(f'args.{name}'):
+            return True
+        return False
+
     # merge from specific arguments
-    if args.batch_size:
+    if _check_args('batch_size'):
         config.DATA.BATCH_SIZE = args.batch_size
-    if args.data_path:
+    if _check_args('data_path'):
         config.DATA.DATA_PATH = args.data_path
-    if args.zip:
+    if _check_args('zip'):
         config.DATA.ZIP_MODE = True
-    if args.cache_mode:
+    if _check_args('cache_mode'):
         config.DATA.CACHE_MODE = args.cache_mode
-    if args.pretrained:
+    if _check_args('pretrained'):
         config.MODEL.PRETRAINED = args.pretrained
-    if args.resume:
+    if _check_args('resume'):
         config.MODEL.RESUME = args.resume
-    if args.accumulation_steps:
+    if _check_args('accumulation_steps'):
         config.TRAIN.ACCUMULATION_STEPS = args.accumulation_steps
-    if args.use_checkpoint:
+    if _check_args('use_checkpoint'):
         config.TRAIN.USE_CHECKPOINT = True
-    if args.amp_opt_level:
-        config.AMP_OPT_LEVEL = args.amp_opt_level
-    if args.output:
+    if _check_args('amp_opt_level'):
+        print("[warning] Apex amp has been deprecated, please use pytorch amp instead!")
+        if args.amp_opt_level == 'O0':
+            config.AMP_ENABLE = False
+    if _check_args('disable_amp'):
+        config.AMP_ENABLE = False
+    if _check_args('output'):
         config.OUTPUT = args.output
-    if args.tag:
+    if _check_args('tag'):
         config.TAG = args.tag
-    if args.eval:
+    if _check_args('eval'):
         config.EVAL_MODE = True
-    if args.throughput:
+    if _check_args('throughput'):
         config.THROUGHPUT_MODE = True
+
+    # [SimMIM]
+    if _check_args('enable_amp'):
+        config.ENABLE_AMP = args.enable_amp
+
+    # for acceleration
+    if _check_args('fused_window_process'):
+        config.FUSED_WINDOW_PROCESS = True
+    if _check_args('fused_layernorm'):
+        config.FUSED_LAYERNORM = True
+    ## Overwrite optimizer if not None, currently we use it for [fused_adam, fused_lamb]
+    if _check_args('optim'):
+        config.TRAIN.OPTIMIZER.NAME = args.optim
 
     # set local rank for distributed training
     config.LOCAL_RANK = args.local_rank

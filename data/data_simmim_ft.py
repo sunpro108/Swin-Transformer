@@ -1,72 +1,36 @@
 # --------------------------------------------------------
-# Swin Transformer
+# SimMIM
 # Copyright (c) 2021 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
-# Written by Ze Liu
+# Written by Zhenda Xie
 # --------------------------------------------------------
 
 import os
-import torch
-import numpy as np
 import torch.distributed as dist
+from torch.utils.data import DataLoader, DistributedSampler
 from torchvision import datasets, transforms
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.data import Mixup
 from timm.data import create_transform
-
-from .cached_image_folder import CachedImageFolder
-from .imagenet22k_dataset import IN22KDATASET
-from .samplers import SubsetRandomSampler
-
-try:
-    from torchvision.transforms import InterpolationMode
+from timm.data.transforms import _pil_interp
 
 
-    def _pil_interp(method):
-        if method == 'bicubic':
-            return InterpolationMode.BICUBIC
-        elif method == 'lanczos':
-            return InterpolationMode.LANCZOS
-        elif method == 'hamming':
-            return InterpolationMode.HAMMING
-        else:
-            # default bilinear, do we want to allow nearest?
-            return InterpolationMode.BILINEAR
-
-
-    import timm.data.transforms as timm_transforms
-
-    timm_transforms._pil_interp = _pil_interp
-except:
-    from timm.data.transforms import _pil_interp
-
-
-def build_loader(config):
+def build_loader_finetune(config):
     config.defrost()
     dataset_train, config.MODEL.NUM_CLASSES = build_dataset(is_train=True, config=config)
     config.freeze()
-    print(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build train dataset")
     dataset_val, _ = build_dataset(is_train=False, config=config)
-    print(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build val dataset")
 
     num_tasks = dist.get_world_size()
     global_rank = dist.get_rank()
-    if config.DATA.ZIP_MODE and config.DATA.CACHE_MODE == 'part':
-        indices = np.arange(dist.get_rank(), len(dataset_train), dist.get_world_size())
-        sampler_train = SubsetRandomSampler(indices)
-    else:
-        sampler_train = torch.utils.data.DistributedSampler(
-            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-        )
+    sampler_train = DistributedSampler(
+        dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+    )
+    sampler_val = DistributedSampler(
+        dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False
+    )
 
-    if config.TEST.SEQUENTIAL:
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-    else:
-        sampler_val = torch.utils.data.distributed.DistributedSampler(
-            dataset_val, shuffle=config.TEST.SHUFFLE
-        )
-
-    data_loader_train = torch.utils.data.DataLoader(
+    data_loader_train = DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=config.DATA.BATCH_SIZE,
         num_workers=config.DATA.NUM_WORKERS,
@@ -74,13 +38,12 @@ def build_loader(config):
         drop_last=True,
     )
 
-    data_loader_val = torch.utils.data.DataLoader(
+    data_loader_val = DataLoader(
         dataset_val, sampler=sampler_val,
         batch_size=config.DATA.BATCH_SIZE,
-        shuffle=False,
         num_workers=config.DATA.NUM_WORKERS,
         pin_memory=config.DATA.PIN_MEMORY,
-        drop_last=False
+        drop_last=False,
     )
 
     # setup mixup / cutmix
@@ -97,25 +60,12 @@ def build_loader(config):
 
 def build_dataset(is_train, config):
     transform = build_transform(is_train, config)
+    
     if config.DATA.DATASET == 'imagenet':
         prefix = 'train' if is_train else 'val'
-        if config.DATA.ZIP_MODE:
-            ann_file = prefix + "_map.txt"
-            prefix = prefix + ".zip@/"
-            dataset = CachedImageFolder(config.DATA.DATA_PATH, ann_file, prefix, transform,
-                                        cache_mode=config.DATA.CACHE_MODE if is_train else 'part')
-        else:
-            root = os.path.join(config.DATA.DATA_PATH, prefix)
-            dataset = datasets.ImageFolder(root, transform=transform)
+        root = os.path.join(config.DATA.DATA_PATH, prefix)
+        dataset = datasets.ImageFolder(root, transform=transform)
         nb_classes = 1000
-    elif config.DATA.DATASET == 'imagenet22K':
-        prefix = 'ILSVRC2011fall_whole'
-        if is_train:
-            ann_file = prefix + "_map_train.txt"
-        else:
-            ann_file = prefix + "_map_val.txt"
-        dataset = IN22KDATASET(config.DATA.DATA_PATH, ann_file, transform)
-        nb_classes = 21841
     else:
         raise NotImplementedError("We only support ImageNet Now.")
 
